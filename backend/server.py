@@ -18,6 +18,7 @@ class Meal(db.Model):
     calories = db.Column(db.Integer)
     meal_type = db.Column(db.String(50))
     date = db.Column(db.Date, default=datetime.date.today)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.now)
 
     def to_dict(self):
         return {
@@ -26,6 +27,7 @@ class Meal(db.Model):
             "calories": self.calories,
             "meal_type": self.meal_type,
             "date": self.date.isoformat() if self.date else None,
+            "created_at": self.created_at.strftime("%I:%M %p").lstrip("0") if self.created_at else None,
         }
 
 

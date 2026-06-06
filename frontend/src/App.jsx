@@ -3,6 +3,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
+const MEAL_TYPE_ORDER = ["breakfast", "lunch", "dinner", "snack", "drink"]
+
+function capitalize(str) {
+  return str.charAt(0).toUpperCase() + str.slice(1)
+}
+
 function App() {
   const [meals, setMeals] = useState([])
   const [name, setName] = useState("")
@@ -37,6 +43,14 @@ function App() {
       method: "DELETE",
     }).then(() => fetchMeals())
   }
+
+  const grouped = {}
+  MEAL_TYPE_ORDER.forEach(type => {
+    const group = meals.filter(m => m.meal_type === type)
+    if (group.length > 0) grouped[type] = group
+  })
+  const other = meals.filter(m => !m.meal_type || !MEAL_TYPE_ORDER.includes(m.meal_type))
+  if (other.length > 0) grouped["other"] = other
 
   return (
     <div className="max-w-lg mx-auto p-8">
@@ -74,7 +88,7 @@ function App() {
         </CardContent>
       </Card>
 
-      <div className="flex justify-between items-center mb-2">
+      <div className="flex justify-between items-center mb-4">
         <span className="font-semibold">Today's meals</span>
         <span className="text-muted-foreground text-sm">
           Total: {meals.reduce((sum, meal) => sum + meal.calories, 0)} kcal
@@ -87,24 +101,32 @@ function App() {
           <p className="text-sm">No meals logged yet</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
-          {meals.map((meal) => (
-            <Card key={meal.id}>
-              <CardContent className="flex justify-between items-center py-3">
-                <div>
-                  <span>{meal.name}</span>
-                  {meal.meal_type && (
-                    <span className="ml-2 text-xs text-muted-foreground">
-                      {meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1)}
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-muted-foreground">{meal.calories} kcal</span>
-                  <Button variant="ghost" size="sm" onClick={() => deleteMeal(meal.id)}>
-                    Delete
-                  </Button>
-                </div>
+        <div className="flex flex-col gap-6">
+          {Object.entries(grouped).map(([type, groupMeals]) => (
+            <Card key={type}>
+              <CardHeader className="pb-1">
+                <CardTitle className="text-sm">{capitalize(type)}</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col p-0">
+                {groupMeals.map((meal, i) => (
+                  <div key={meal.id}>
+                    {i > 0 && <div className="mx-4 border-b" />}
+                    <div className="flex justify-between items-center px-4 py-2">
+                    <div>
+                      <p className="text-sm">{meal.name}</p>
+                      {meal.created_at && (
+                        <p className="text-xs text-muted-foreground">{meal.created_at}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-muted-foreground">{meal.calories} kcal</span>
+                      <Button variant="outline" size="sm" onClick={() => deleteMeal(meal.id)}>
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                  </div>
+                ))}
               </CardContent>
             </Card>
           ))}
