@@ -1,21 +1,32 @@
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
 from flask_cors import CORS
+import datetime
 
 app = Flask(__name__)
 CORS(app)
 
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///food_tracker.db"
 db = SQLAlchemy(app)
+migrate = Migrate(app, db)
 
 
 class Meal(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     calories = db.Column(db.Integer)
+    meal_type = db.Column(db.String(50))
+    date = db.Column(db.Date, default=datetime.date.today)
 
     def to_dict(self):
-        return {"id": self.id, "name": self.name, "calories": self.calories}
+        return {
+            "id": self.id,
+            "name": self.name,
+            "calories": self.calories,
+            "meal_type": self.meal_type,
+            "date": self.date.isoformat() if self.date else None,
+        }
 
 
 with app.app_context():
@@ -31,7 +42,7 @@ def get_meals():
 @app.route("/meals", methods=["POST"])
 def add_meal():
     data = request.get_json()
-    meal = Meal(name=data["name"], calories=data.get("calories"))
+    meal = Meal(name=data["name"], calories=data.get("calories"), meal_type=data.get("meal_type"))
     db.session.add(meal)
     db.session.commit()
     return jsonify(meal.to_dict()), 201
