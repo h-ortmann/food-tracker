@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
-const API_URL = import.meta.env.VITE_API_URL || "${API_URL}"
+const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:5000"
 const MEAL_TYPE_ORDER = ["breakfast", "lunch", "dinner", "snack", "drink"]
 
 function capitalize(str) {
@@ -21,13 +21,13 @@ function App() {
   }, [])
 
   function fetchMeals() {
-    fetch("${API_URL}/meals")
+    fetch(`${API_URL}/meals`)
       .then((res) => res.json())
       .then((data) => setMeals(data))
   }
 
   function addMeal() {
-    fetch("${API_URL}/meals", {
+    fetch(`${API_URL}/meals`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, calories: Number(calories), meal_type: mealType }),
