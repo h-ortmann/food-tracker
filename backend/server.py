@@ -3,11 +3,15 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_cors import CORS
 import datetime
+import os
 
 app = Flask(__name__)
 CORS(app)
 
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///food_tracker.db"
+database_url = os.environ.get("DATABASE_URL", "sqlite:///food_tracker.db")
+if database_url.startswith("postgres://"):
+    database_url = database_url.replace("postgres://", "postgresql://", 1)
+app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
@@ -29,10 +33,6 @@ class Meal(db.Model):
             "date": self.date.isoformat() if self.date else None,
             "created_at": self.created_at.strftime("%I:%M %p").lstrip("0") if self.created_at else None,
         }
-
-
-with app.app_context():
-    db.create_all()
 
 
 @app.route("/meals", methods=["GET"])

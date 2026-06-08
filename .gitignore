@@ -10,5 +10,8 @@ backend/instance/
 frontend/node_modules/
 frontend/dist/
 
+# Local env files
+**/.env.local
+
 # Editor
 .DS_Store
