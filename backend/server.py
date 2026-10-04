@@ -103,6 +103,8 @@ def update_meal(id):
         meal.name = data["name"]
     if "calories" in data:
         meal.calories = data["calories"]
+    if "meal_type" in data:
+        meal.meal_type = data["meal_type"]
     db.session.commit()
     return jsonify(meal.to_dict())
 

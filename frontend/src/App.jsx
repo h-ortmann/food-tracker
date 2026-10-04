@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react"
+import { Pencil, Trash2, Check, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -20,6 +21,10 @@ function App() {
   const [name, setName] = useState("")
   const [calories, setCalories] = useState("")
   const [mealType, setMealType] = useState("")
+  const [editingMealId, setEditingMealId] = useState(null)
+  const [editName, setEditName] = useState("")
+  const [editCalories, setEditCalories] = useState("")
+  const [editMealType, setEditMealType] = useState("")
 
   useEffect(() => {
     fetchMeals()
@@ -78,6 +83,28 @@ function App() {
     fetch(`${API_URL}/meals/${id}`, {
       method: "DELETE",
     }).then(() => fetchMeals())
+  }
+
+  function startEditMeal(meal) {
+    setEditingMealId(meal.id)
+    setEditName(meal.name)
+    setEditCalories(meal.calories)
+    setEditMealType(meal.meal_type || "")
+  }
+
+  function cancelEditMeal() {
+    setEditingMealId(null)
+  }
+
+  function saveEditMeal(id) {
+    fetch(`${API_URL}/meals/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: editName, calories: Number(editCalories), meal_type: editMealType }),
+    }).then(() => {
+      setEditingMealId(null)
+      fetchMeals()
+    })
   }
 
   const grouped = {}
@@ -152,20 +179,56 @@ function App() {
                 {groupMeals.map((meal, i) => (
                   <div key={meal.id}>
                     {i > 0 && <div className="mx-4 border-b" />}
-                    <div className="flex justify-between items-center px-4 py-2">
-                    <div>
-                      <p className="text-sm">{meal.name}</p>
-                      {meal.created_at && (
-                        <p className="text-xs text-muted-foreground">{meal.created_at}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm text-muted-foreground">{meal.calories} kcal</span>
-                      <Button variant="outline" size="sm" onClick={() => deleteMeal(meal.id)}>
-                        Delete
-                      </Button>
-                    </div>
-                  </div>
+                    {editingMealId === meal.id ? (
+                      <div className="flex items-center gap-2 px-4 py-2">
+                        <Input
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          className="h-8"
+                        />
+                        <Input
+                          value={editCalories}
+                          onChange={(e) => setEditCalories(e.target.value)}
+                          className="h-8 w-20"
+                        />
+                        <select
+                          value={editMealType}
+                          onChange={(e) => setEditMealType(e.target.value)}
+                          className="h-8 rounded-lg border border-input px-2.5 py-1 text-sm bg-transparent"
+                        >
+                          <option value="">Type</option>
+                          <option value="breakfast">Breakfast</option>
+                          <option value="lunch">Lunch</option>
+                          <option value="dinner">Dinner</option>
+                          <option value="snack">Snack</option>
+                          <option value="drink">Drink</option>
+                        </select>
+                        <Button variant="outline" size="icon" onClick={() => saveEditMeal(meal.id)}>
+                          <Check className="size-4" />
+                        </Button>
+                        <Button variant="outline" size="icon" onClick={cancelEditMeal}>
+                          <X className="size-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex justify-between items-center px-4 py-2">
+                        <div>
+                          <p className="text-sm">{meal.name}</p>
+                          {meal.created_at && (
+                            <p className="text-xs text-muted-foreground">{meal.created_at}</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm text-muted-foreground">{meal.calories} kcal</span>
+                          <Button variant="outline" size="icon" onClick={() => startEditMeal(meal)}>
+                            <Pencil className="size-4" />
+                          </Button>
+                          <Button variant="outline" size="icon" onClick={() => deleteMeal(meal.id)}>
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </CardContent>
