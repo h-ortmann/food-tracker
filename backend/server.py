@@ -34,6 +34,47 @@ class Meal(db.Model):
             "meal_type": self.meal_type,
             "date": self.date.isoformat() if self.date else None,
             "created_at": self.created_at.strftime("%I:%M %p").lstrip("0") if self.created_at else None,
+            "timestamp": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class Symptom(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    type = db.Column(db.String(50), nullable=False)  # bloating / pain / nausea / diarrhea / stool
+    severity = db.Column(db.Integer)  # 1-5 scale, not used for stool
+    body_part = db.Column(db.String(50))  # only for pain: stomach / digestive_tract / head / uterus
+    bristol_scale = db.Column(db.Integer)  # only for stool: 1-7
+    notes = db.Column(db.String(500))
+    date = db.Column(db.Date, default=datetime.date.today)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.now)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "type": self.type,
+            "severity": self.severity,
+            "body_part": self.body_part,
+            "bristol_scale": self.bristol_scale,
+            "notes": self.notes,
+            "date": self.date.isoformat() if self.date else None,
+            "created_at": self.created_at.strftime("%I:%M %p").lstrip("0") if self.created_at else None,
+            "timestamp": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class WeightEntry(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    weight = db.Column(db.Float, nullable=False)
+    date = db.Column(db.Date, default=datetime.date.today)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.now)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "weight": self.weight,
+            "date": self.date.isoformat() if self.date else None,
+            "created_at": self.created_at.strftime("%I:%M %p").lstrip("0") if self.created_at else None,
+            "timestamp": self.created_at.isoformat() if self.created_at else None,
         }
 
 
@@ -72,6 +113,87 @@ def delete_meal(id):
     if meal is None:
         return jsonify({"error": "Meal not found"}), 404
     db.session.delete(meal)
+    db.session.commit()
+    return jsonify({"deleted": id})
+
+
+@app.route("/symptoms", methods=["GET"])
+def get_symptoms():
+    symptoms = Symptom.query.all()
+    return jsonify([symptom.to_dict() for symptom in symptoms])
+
+
+@app.route("/symptoms", methods=["POST"])
+def add_symptom():
+    data = request.get_json()
+    symptom = Symptom(
+        type=data["type"],
+        severity=data.get("severity"),
+        body_part=data.get("body_part"),
+        bristol_scale=data.get("bristol_scale"),
+        notes=data.get("notes"),
+    )
+    db.session.add(symptom)
+    db.session.commit()
+    return jsonify(symptom.to_dict()), 201
+
+
+@app.route("/symptoms/<int:id>", methods=["PUT"])
+def update_symptom(id):
+    symptom = db.session.get(Symptom, id)
+    if symptom is None:
+        return jsonify({"error": "Symptom not found"}), 404
+    data = request.get_json()
+    for field in ["type", "severity", "body_part", "bristol_scale", "notes"]:
+        if field in data:
+            setattr(symptom, field, data[field])
+    db.session.commit()
+    return jsonify(symptom.to_dict())
+
+
+@app.route("/symptoms/<int:id>", methods=["DELETE"])
+def delete_symptom(id):
+    symptom = db.session.get(Symptom, id)
+    if symptom is None:
+        return jsonify({"error": "Symptom not found"}), 404
+    db.session.delete(symptom)
+    db.session.commit()
+    return jsonify({"deleted": id})
+
+
+@app.route("/weights", methods=["GET"])
+def get_weights():
+    weights = WeightEntry.query.all()
+    return jsonify([w.to_dict() for w in weights])
+
+
+@app.route("/weights", methods=["POST"])
+def add_weight():
+    data = request.get_json()
+    weight = WeightEntry(weight=data["weight"])
+    db.session.add(weight)
+    db.session.commit()
+    return jsonify(weight.to_dict()), 201
+
+
+@app.route("/weights/<int:id>", methods=["PUT"])
+def update_weight(id):
+    weight = db.session.get(WeightEntry, id)
+    if weight is None:
+        return jsonify({"error": "Weight entry not found"}), 404
+    data = request.get_json()
+    if "weight" in data:
+        weight.weight = data["weight"]
+    db.session.commit()
+    return jsonify(weight.to_dict())
+
+
+@app.route("/weights/<int:id>", methods=["DELETE"])
+def delete_weight(id):
+    weight = db.session.get(WeightEntry, id)
+    if weight is None:
+        return jsonify({"error": "Weight entry not found"}), 404
+    db.session.delete(weight)
     db.session.commit()
     return jsonify({"deleted": id})
 

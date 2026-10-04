@@ -2,6 +2,9 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { SymptomForm } from "@/components/SymptomForm"
+import { WeightForm } from "@/components/WeightForm"
+import { Timeline } from "@/components/Timeline"
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:5000"
 const MEAL_TYPE_ORDER = ["breakfast", "lunch", "dinner", "snack", "drink"]
@@ -12,18 +15,50 @@ function capitalize(str) {
 
 function App() {
   const [meals, setMeals] = useState([])
+  const [symptoms, setSymptoms] = useState([])
+  const [weights, setWeights] = useState([])
   const [name, setName] = useState("")
   const [calories, setCalories] = useState("")
   const [mealType, setMealType] = useState("")
 
   useEffect(() => {
     fetchMeals()
+    fetchSymptoms()
+    fetchWeights()
   }, [])
 
   function fetchMeals() {
     fetch(`${API_URL}/meals`)
       .then((res) => res.json())
       .then((data) => setMeals(data))
+  }
+
+  function fetchSymptoms() {
+    fetch(`${API_URL}/symptoms`)
+      .then((res) => res.json())
+      .then((data) => setSymptoms(data))
+  }
+
+  function fetchWeights() {
+    fetch(`${API_URL}/weights`)
+      .then((res) => res.json())
+      .then((data) => setWeights(data))
+  }
+
+  function addSymptom(symptom) {
+    fetch(`${API_URL}/symptoms`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(symptom),
+    }).then(() => fetchSymptoms())
+  }
+
+  function addWeight(weight) {
+    fetch(`${API_URL}/weights`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ weight }),
+    }).then(() => fetchWeights())
   }
 
   function addMeal() {
@@ -57,6 +92,8 @@ function App() {
     <div className="max-w-lg mx-auto p-8">
       <h1 className="text-2xl font-bold mb-6">Food Tracker</h1>
 
+      <Timeline meals={meals} symptoms={symptoms} weights={weights} />
+
       <Card className="mb-6">
         <CardHeader>
           <CardTitle>Log a meal</CardTitle>
@@ -88,6 +125,9 @@ function App() {
           <Button onClick={addMeal}>Add</Button>
         </CardContent>
       </Card>
+
+      <SymptomForm onAdd={addSymptom} />
+      <WeightForm onAdd={addWeight} />
 
       <div className="flex justify-between items-center mb-4">
         <span className="font-semibold">Today's meals</span>
