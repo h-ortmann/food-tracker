@@ -22,6 +22,7 @@ class Meal(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     calories = db.Column(db.Integer)
+    grams = db.Column(db.Float)
     meal_type = db.Column(db.String(50))
     date = db.Column(db.Date, default=datetime.date.today)
     created_at = db.Column(db.DateTime, default=datetime.datetime.now)
@@ -31,6 +32,7 @@ class Meal(db.Model):
             "id": self.id,
             "name": self.name,
             "calories": self.calories,
+            "grams": self.grams,
             "meal_type": self.meal_type,
             "date": self.date.isoformat() if self.date else None,
             "created_at": self.created_at.strftime("%I:%M %p").lstrip("0") if self.created_at else None,
@@ -87,7 +89,7 @@ def get_meals():
 @app.route("/meals", methods=["POST"])
 def add_meal():
     data = request.get_json()
-    meal = Meal(name=data["name"], calories=data.get("calories"), meal_type=data.get("meal_type"))
+    meal = Meal(name=data["name"], calories=data.get("calories"), grams=data.get("grams"), meal_type=data.get("meal_type"))
     db.session.add(meal)
     db.session.commit()
     return jsonify(meal.to_dict()), 201
@@ -103,6 +105,8 @@ def update_meal(id):
         meal.name = data["name"]
     if "calories" in data:
         meal.calories = data["calories"]
+    if "grams" in data:
+        meal.grams = data["grams"]
     if "meal_type" in data:
         meal.meal_type = data["meal_type"]
     db.session.commit()

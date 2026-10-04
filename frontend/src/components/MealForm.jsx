@@ -8,20 +8,23 @@ export function MealForm({ onAdd, onDone }) {
   const [mealType, setMealType] = useState("")
   const [name, setName] = useState("")
   const [calories, setCalories] = useState("")
+  const [grams, setGrams] = useState("")
   const [loggedItems, setLoggedItems] = useState([])
 
   function handleAddItem() {
     if (!name) return
-    onAdd({ name, calories: Number(calories) || 0, meal_type: mealType })
-    setLoggedItems((prev) => [...prev, { name, calories }])
+    onAdd({ name, calories: Number(calories) || 0, grams: Number(grams) || null, meal_type: mealType })
+    setLoggedItems((prev) => [...prev, { name, calories, grams }])
     setName("")
     setCalories("")
+    setGrams("")
   }
 
   function handleDone() {
     setMealType("")
     setName("")
     setCalories("")
+    setGrams("")
     setLoggedItems([])
     onDone()
   }
@@ -55,7 +58,7 @@ export function MealForm({ onAdd, onDone }) {
           <div className="flex flex-col gap-1">
             {loggedItems.map((item, i) => (
               <p key={i} className="text-sm text-muted-foreground">
-                ✓ {item.name}{item.calories ? ` — ${item.calories} kcal` : ""}
+                ✓ {item.name}{item.calories ? ` — ${item.calories} kcal` : ""}{item.grams ? ` (${item.grams}g)` : ""}
               </p>
             ))}
           </div>
@@ -71,6 +74,12 @@ export function MealForm({ onAdd, onDone }) {
             value={calories}
             onChange={(e) => setCalories(e.target.value)}
             className="w-24"
+          />
+          <Input
+            placeholder="Grams"
+            value={grams}
+            onChange={(e) => setGrams(e.target.value)}
+            className="w-20"
           />
           <Button onClick={handleAddItem}>Add</Button>
         </div>

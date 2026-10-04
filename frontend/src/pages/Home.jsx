@@ -21,7 +21,13 @@ export function Home() {
   const [editingMealId, setEditingMealId] = useState(null)
   const [editName, setEditName] = useState("")
   const [editCalories, setEditCalories] = useState("")
+  const [editGrams, setEditGrams] = useState("")
   const [editMealType, setEditMealType] = useState("")
+
+  const [editingSymptomId, setEditingSymptomId] = useState(null)
+
+  const [editingWeightId, setEditingWeightId] = useState(null)
+  const [editWeightValue, setEditWeightValue] = useState("")
 
   useEffect(() => {
     fetchMeals()
@@ -88,6 +94,7 @@ export function Home() {
     setEditingMealId(meal.id)
     setEditName(meal.name)
     setEditCalories(meal.calories)
+    setEditGrams(meal.grams || "")
     setEditMealType(meal.meal_type || "")
   }
 
@@ -99,10 +106,68 @@ export function Home() {
     fetch(`${API_URL}/meals/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: editName, calories: Number(editCalories), meal_type: editMealType }),
+      body: JSON.stringify({
+        name: editName,
+        calories: Number(editCalories),
+        grams: Number(editGrams) || null,
+        meal_type: editMealType,
+      }),
     }).then(() => {
       setEditingMealId(null)
       fetchMeals()
+    })
+  }
+
+  function deleteSymptom(id) {
+    if (!window.confirm("Delete this symptom?")) return
+    fetch(`${API_URL}/symptoms/${id}`, {
+      method: "DELETE",
+    }).then(() => fetchSymptoms())
+  }
+
+  function startEditSymptom(symptom) {
+    setEditingSymptomId(symptom.id)
+  }
+
+  function cancelEditSymptom() {
+    setEditingSymptomId(null)
+  }
+
+  function saveEditSymptom(id, data) {
+    fetch(`${API_URL}/symptoms/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    }).then(() => {
+      setEditingSymptomId(null)
+      fetchSymptoms()
+    })
+  }
+
+  function deleteWeight(id) {
+    if (!window.confirm("Delete this weight entry?")) return
+    fetch(`${API_URL}/weights/${id}`, {
+      method: "DELETE",
+    }).then(() => fetchWeights())
+  }
+
+  function startEditWeight(weight) {
+    setEditingWeightId(weight.id)
+    setEditWeightValue(weight.weight)
+  }
+
+  function cancelEditWeight() {
+    setEditingWeightId(null)
+  }
+
+  function saveEditWeight(id) {
+    fetch(`${API_URL}/weights/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ weight: Number(editWeightValue) }),
+    }).then(() => {
+      setEditingWeightId(null)
+      fetchWeights()
     })
   }
 
@@ -136,15 +201,29 @@ export function Home() {
         editingMealId={editingMealId}
         editName={editName}
         editCalories={editCalories}
+        editGrams={editGrams}
         editMealType={editMealType}
         onEditNameChange={setEditName}
         onEditCaloriesChange={setEditCalories}
+        onEditGramsChange={setEditGrams}
         onEditMealTypeChange={setEditMealType}
         onStartEditMeal={startEditMeal}
         onCancelEditMeal={cancelEditMeal}
         onSaveEditMeal={saveEditMeal}
         onDeleteMeal={deleteMeal}
         onAddMeal={addMeal}
+        editingSymptomId={editingSymptomId}
+        onStartEditSymptom={startEditSymptom}
+        onCancelEditSymptom={cancelEditSymptom}
+        onSaveEditSymptom={saveEditSymptom}
+        onDeleteSymptom={deleteSymptom}
+        editingWeightId={editingWeightId}
+        editWeightValue={editWeightValue}
+        onEditWeightValueChange={setEditWeightValue}
+        onStartEditWeight={startEditWeight}
+        onCancelEditWeight={cancelEditWeight}
+        onSaveEditWeight={saveEditWeight}
+        onDeleteWeight={deleteWeight}
       />
 
       <Sheet open={mealSheetOpen} onOpenChange={setMealSheetOpen}>
