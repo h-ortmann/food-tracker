@@ -80,6 +80,7 @@ function App() {
   }
 
   function deleteMeal(id) {
+    if (!window.confirm("Delete this meal?")) return
     fetch(`${API_URL}/meals/${id}`, {
       method: "DELETE",
     }).then(() => fetchMeals())
