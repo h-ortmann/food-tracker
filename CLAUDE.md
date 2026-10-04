@@ -26,6 +26,7 @@ Milestone 1 app. A food/meal logging tracker. Goal: touch every layer of the sta
 | id | Integer | Auto-generated primary key |
 | name | String(100) | Required |
 | calories | Integer | Optional |
+| grams | Float | Optional, added 2026-10-04 — shown in parentheses after calories |
 | meal_type | String(50) | breakfast / lunch / dinner / snack / drink |
 | date | Date | Defaults to today |
 | created_at | DateTime | Defaults to now — used for timestamps in UI |
@@ -59,26 +60,39 @@ Routes: full CRUD for both at `/symptoms` and `/symptoms/<id>`, `/weights` and `
 ### Frontend (`/frontend`)
 - React + Vite
 - Tailwind CSS v4 (via `@tailwindcss/vite` plugin)
-- shadcn/ui for components (Card, Input, Button)
+- shadcn/ui for components (Card, Input, Button, Sheet)
+- `react-router-dom` for page routing (added 2026-10-04)
 - API URL read from `VITE_API_URL` env var (falls back to `http://127.0.0.1:5000`)
 - Local dev: `frontend/.env.local` sets `VITE_API_URL=http://127.0.0.1:5000`
 - Run with: `npm run dev` → serves on `http://localhost:5173`
 - Node via nvm — if `npm` not found, run: `source ~/.nvm/nvm.sh`
 
-### Current UI
-- Timeline at the top of the page: combined chronological feed of meals, symptoms, and weight entries, sorted by raw timestamp (`src/components/Timeline.jsx`)
-- Meal log form: name + calories + meal type dropdown
-- Meals grouped into cards by type (Breakfast, Lunch, Dinner, Snack, Drink, Other)
-- Empty groups hidden — cards appear as meals are logged
-- Timestamp below each meal name (12-hour format, e.g. "9:30 AM")
-- Inset dividers between meals within a group (mx-4)
-- Running calorie total in header
-- Empty state: 🍽️ emoji + "No meals logged yet" when list is empty
-- Delete button with outline border (variant="outline")
-- **Symptom log form** (`src/components/SymptomForm.jsx`, added 2026-09-06): type dropdown, then conditional fields — toggle-button row for body part (pain only), toggle-button row for severity 1–5 (all types except stool), toggle-button row for Bristol scale 1–7 with hover descriptions (stool only), optional notes field
-- **Weight log form** (`src/components/WeightForm.jsx`, added 2026-09-06): single number input + Add
+### App structure (restructured 2026-10-04)
+The app moved from a single scrolling page to a mobile-app-style shell: a bottom nav with three tabs, routed with `react-router-dom`.
 
-Frontend is no longer a single-file app — `App.jsx` now owns fetch/state logic and passes `onAdd` callbacks down to the three new form components, which manage their own local form state.
+- `src/main.jsx` — wraps `<App />` in `<BrowserRouter>`
+- `src/App.jsx` — just `<Routes>` for the three pages + `<BottomNav>`, rendered on every page
+- `src/components/BottomNav.jsx` — fixed bottom nav, 3 tabs (Home / AIP / Analysis), active tab highlighted via `NavLink`
+- `src/pages/Home.jsx` — the diary (see below); owns all meals/symptoms/weights state and fetch/CRUD logic
+- `src/pages/Aip.jsx` — placeholder for phase 2 (food-friendliness + recipes)
+- `src/pages/Analysis.jsx` — placeholder for phase 3 (trend analysis)
+- `src/lib/mealTypes.js`, `src/lib/symptomTypes.js` — shared constants (icons/labels, toggle-row option lists) so the logging forms and the timeline display stay in sync instead of duplicating lookup tables
+
+**Why only 3 tabs, not 4:** symptom/weight history isn't a separate page — the Home diary (the combined `Timeline`) already shows everything chronologically, so a dedicated "Food Log" or "Symptoms" page would just be a filtered duplicate of the same data.
+
+### Home page (the diary)
+- Two primary quick-action buttons at the top — **Log meal** and **Log symptom** — open a bottom sheet (shadcn `Sheet`, slides up from the bottom) rather than showing the form inline on the page
+- Small **weight** button next to the title (shows last logged weight, or "Log weight"), also opens a sheet — lower visual weight since it's a once-a-day action
+- **Logging a meal** (`src/components/MealForm.jsx`): pick the meal type first (breakfast/lunch/dinner/snack/drink), then add as many food items as you want — each "Add" saves immediately, with a running "✓ item" checklist — then hit **Done** to close the sheet. Replaces the old one-item-at-a-time flow.
+- **Timeline** (`src/components/Timeline.jsx`) — combined chronological feed of meals, symptoms, and weight entries, **newest first** (flipped from oldest-first on 2026-10-04, to help spot recent patterns)
+  - Meals are **grouped by date + meal type** (e.g. one "Lunch" row instead of one row per food item), showing the meal type, time, and total calories. Tap to expand and see each item individually, with pencil/trash icons to edit/delete.
+  - Expanded groups have a "+ Add item" row to add a forgotten item straight into that group — defaults to today's date (no date picker yet, so this only works correctly for same-day groups)
+  - Each food item shows calories and, if set, **grams in parentheses** (e.g. "Chicken — 300 kcal (150g)"), added 2026-10-04
+  - **Symptoms and weight entries are also editable/deletable** in place (pencil opens an inline edit form, trash deletes with a `window.confirm` guard) — added 2026-10-04 for consistency with meals
+  - Deleting a meal also asks for confirmation (added after the delete button became icon-only, to guard against accidental taps)
+- Empty state: "Nothing logged yet today" when the timeline is empty
+
+Frontend is fully split into components — `Home.jsx` owns fetch/state logic for all three entry types and passes callbacks down; forms (`MealForm`, `SymptomForm`, `WeightForm`) manage their own local input state; `Timeline` owns its own expand/collapse and "add item inline" state.
 
 ## Decisions made
 
@@ -95,6 +109,10 @@ Frontend is no longer a single-file app — `App.jsx` now owns fetch/state logic
 | DB hosting | Neon | Free serverless PostgreSQL, no credit card |
 | Frontend hosting | Vercel | Free, excellent GitHub integration |
 | Symptom data model | One flexible `Symptom` table with nullable type-specific columns, not a table per symptom type | Timeline and future trend-analysis need to query "everything on this date" as one simple query |
+| App structure | Bottom nav with 3 pages (Home/AIP/Analysis), routed with `react-router-dom` | Mobile-app-style navigation instead of one long scrolling page; decided before building AIP/Analysis so those features get built into their own screen instead of needing to be carved out of Home later |
+| Home page content | No separate "Food Log" or "Symptoms" page — Home's combined `Timeline` serves as the browsable diary for everything | A dedicated history page per entry type would just duplicate what the Timeline already shows |
+| Meal logging flow | Pick meal type first, then add multiple items before closing the sheet | Logging a full meal item-by-item (re-selecting type each time) was tedious |
+| Timeline order | Newest-first (meals, symptoms, weights, and items within an expanded meal group) | Recent entries matter most for spotting patterns day-to-day |
 
 ## Deployment setup
 
@@ -147,15 +165,15 @@ FLASK_APP=server flask db upgrade
 
 Turning this from a plain meal logger into a symptom-and-food tracker ahead of an AIP diet. Three planned phases:
 
-1. **Symptom/reaction logger** — done 2026-09-06 (see models/UI above). Not yet committed to git, and not yet reviewed by Hannah in her own browser — that's the very next step.
-2. **AIP feature** — food-friendliness lookup, AI-suggested recipes, saved recipes. Should reuse the AI-recipe-generation pattern already built in the use-it-up project.
-3. **Trend analysis** — correlate symptoms with meals/recipes eaten beforehand. Deliberately saved for last, once phases 1–2 have produced real logged data.
+1. **Symptom/reaction logger** — done 2026-09-06, reviewed and polished 2026-10-04 (nav/IA restructure, grams, newest-first order, full edit/delete for all entry types — see sections above). Committed and pushed.
+2. **AIP feature** — food-friendliness lookup, AI-suggested recipes, saved recipes. Should reuse the AI-recipe-generation pattern already built in the use-it-up project. Page shell exists (`src/pages/Aip.jsx`) but is just a placeholder.
+3. **Trend analysis** — correlate symptoms with meals/recipes eaten beforehand. Deliberately saved for last, once phases 1–2 have produced real logged data. Page shell exists (`src/pages/Analysis.jsx`) but is just a placeholder.
 
 Longer-term, explicitly deprioritized for now: making this accessible as a phone app rather than browser-only (PWA vs. native wrapper vs. React Native — needs fresh landscape research when it becomes the priority).
 
+Known limitation: the Timeline's inline "+ Add item" (adding a forgotten item to an existing meal group) always saves with today's date, since `POST /meals` doesn't yet accept an explicit date — fine for "forgot to log something earlier today," not for backdating into a past day's group.
+
 ## What comes next
 
-1. **Hannah reviews the symptom logger UI locally** and brings back adjustments/feedback
-2. **Commit today's work** — nothing from the 2026-09-06 session is committed yet (also note: some older CLAUDE.md edits from a prior session were already sitting uncommitted before today)
-3. Move to the AIP feature (phase 2 above) once phase 1 feels right
-4. Older backlog, still valid: App mascot / real image for empty state; AI feature: calorie estimation from meal name
+1. Move to the AIP feature (phase 2 above) — build out `src/pages/Aip.jsx` for real
+2. Older backlog, still valid: App mascot / real image for empty state; AI feature: calorie estimation from meal name
