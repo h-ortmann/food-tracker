@@ -1,14 +1,10 @@
-import { ArrowRightLeft } from "lucide-react"
+import { ArrowRightLeft, Bookmark, Check } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-
-const VERDICTS = {
-  yes: { emoji: "✅", label: "Yes", style: "bg-green-100 text-green-800 border-green-300" },
-  no: { emoji: "❌", label: "No", style: "bg-red-100 text-red-800 border-red-300" },
-  maybe: { emoji: "⚠️", label: "Maybe", style: "bg-amber-100 text-amber-900 border-amber-300" },
-}
+import { VERDICTS } from "@/lib/verdicts"
 
 // Dumb: displays whatever result it's given
-export function VerdictCard({ result }) {
+export function VerdictCard({ result, isSaved, onSave }) {
   const verdict = VERDICTS[result.verdict]
 
   return (
@@ -31,6 +27,10 @@ export function VerdictCard({ result }) {
             </p>
           </div>
         )}
+        <Button variant="outline" onClick={onSave} disabled={isSaved} className="self-start">
+          {isSaved ? <Check className="size-4" /> : <Bookmark className="size-4" />}
+          {isSaved ? "Saved" : "Save to my list"}
+        </Button>
       </CardContent>
     </Card>
   )

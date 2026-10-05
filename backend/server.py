@@ -85,6 +85,24 @@ class WeightEntry(db.Model):
         }
 
 
+class SavedFood(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    food = db.Column(db.String(100), nullable=False, unique=True)  # unique: saving again updates, never duplicates
+    verdict = db.Column(db.String(10), nullable=False)  # yes / no / maybe
+    reason = db.Column(db.String(500))
+    swap = db.Column(db.String(200))
+    created_at = db.Column(db.DateTime, default=datetime.datetime.now)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "food": self.food,
+            "verdict": self.verdict,
+            "reason": self.reason,
+            "swap": self.swap,
+        }
+
+
 @app.route("/meals", methods=["GET"])
 def get_meals():
     meals = Meal.query.all()
@@ -229,7 +247,7 @@ The user names a food. Decide whether it is allowed during the AIP elimination p
 - verdict: "yes" if allowed, "no" if excluded, "maybe" if it depends (preparation, quantity, a specific variety, or experts disagree).
 - reason: one short sentence explaining why, naming the relevant food group (e.g. nightshade, seed, grain, legume, dairy).
 - swap: if the verdict is "no" or "maybe", one concrete AIP-friendly alternative that fills the same role in a meal. If "yes", leave it empty.
-- food: the food name, cleaned up and capitalised."""
+- food: the standard English name of the food, singular, capitalised, with typos corrected — even if the user wrote it in another language (e.g. "süßkartoffeln" → "Sweet potato"). The same food must always get the same name."""
 
 
 @app.route("/aip/lookup", methods=["POST"])
@@ -258,6 +276,39 @@ def aip_lookup():
 
     text = next(block.text for block in response.content if block.type == "text")
     return jsonify(json.loads(text))
+
+
+# --- Saved foods (personal safe / maybe / avoid list) ----------------------
+
+@app.route("/saved-foods", methods=["GET"])
+def get_saved_foods():
+    saved = SavedFood.query.order_by(SavedFood.food).all()
+    return jsonify([item.to_dict() for item in saved])
+
+
+@app.route("/saved-foods", methods=["POST"])
+def save_food():
+    data = request.get_json()
+    # Already saved? Update it instead of creating a duplicate
+    item = SavedFood.query.filter_by(food=data["food"]).first()
+    if item is None:
+        item = SavedFood(food=data["food"])
+        db.session.add(item)
+    item.verdict = data["verdict"]
+    item.reason = data.get("reason")
+    item.swap = data.get("swap")
+    db.session.commit()
+    return jsonify(item.to_dict()), 201
+
+
+@app.route("/saved-foods/<int:id>", methods=["DELETE"])
+def delete_saved_food(id):
+    item = db.session.get(SavedFood, id)
+    if item is None:
+        return jsonify({"error": "Saved food not found"}), 404
+    db.session.delete(item)
+    db.session.commit()
+    return jsonify({"deleted": id})
 
 
 if __name__ == "__main__":
