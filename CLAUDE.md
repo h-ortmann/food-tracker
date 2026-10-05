@@ -8,7 +8,7 @@ Milestone 1 app. A food/meal logging tracker. Goal: touch every layer of the sta
 - **Backend**: https://food-tracker-production-9e89.up.railway.app
 - **GitHub**: https://github.com/h-ortmann/food-tracker
 
-## What's been built (as of 2026-10-05)
+## What's been built (as of 2026-10-05, end of day)
 
 ### Backend (`/backend`)
 - Flask API with full CRUD: `GET /meals`, `POST /meals`, `PUT /meals/<id>`, `DELETE /meals/<id>`
@@ -215,8 +215,13 @@ Known limitation: the Timeline's inline "+ Add item" (adding a forgotten item to
 
 ## What comes next
 
+**Pick up here next session:** Hannah should set her calorie goal on the live site (prod goal is still null). Then the suggested next feature is **"log a recipe as a meal"** — a button on `RecipeCard` that adds the recipe to the diary with its `calories_per_serving`, connecting Phase 2's recipes to Phase 1's diary. Alternatively start Phase 3 once 1–2 weeks of real data exist.
+
+
 1. ~~AIP recipe suggestions~~ — done 2026-10-05 (Phase 2 complete). Backlog: save recipes; "use my safe foods" option; log a recipe as a meal (with its calories)
 2. ~~Save lookups into a personal list~~ — done 2026-10-05. Backlog: personal override ("my reaction") on a saved food; "you've searched this 3× — save it?" nudge via localStorage counter (only if Hannah catches herself re-searching without saving); remember open/closed state of the collapsible groups
 3. Older fetch calls in `Home.jsx` still have no error handling (AIP page does — use it as the pattern)
 4. Known limitation still open: inline "+ Add item" always saves with today's date
-5. Older backlog: app mascot / empty-state image; AI calorie estimation from meal name
+5. Timezone quirk: `date` defaults to the server's date (UTC on Railway) but `CalorieSummary` filters by the browser's local date — meals logged 00:00–01:00 BST count toward the previous day. Fix: send the local date from the frontend on POST /meals (pairs well with the date-picker backlog item)
+6. `server.py` is getting long (5 models, 2 AI routes) — Flask Blueprints would be a natural next refactor
+7. Older backlog: app mascot / empty-state image; AI calorie estimation from meal name
