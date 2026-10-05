@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ToggleRow } from "@/components/ToggleRow"
-import { SYMPTOM_TYPES, BODY_PARTS, SEVERITY_SCALE, BRISTOL_SCALE } from "@/lib/symptomTypes"
+import { SYMPTOM_TYPES, BODY_PARTS, SEVERITY_SCALE, BRISTOL_SCALE, FLOW_SCALE } from "@/lib/symptomTypes"
 
 export function SymptomForm({ onAdd }) {
   const [type, setType] = useState("")
@@ -34,7 +34,8 @@ export function SymptomForm({ onAdd }) {
   const canAdd =
     type &&
     (type === "pain" ? bodyPart : true) &&
-    (type === "stool" ? bristolScale : true)
+    (type === "stool" ? bristolScale : true) &&
+    (type === "period" ? severity : true)
 
   return (
     <Card className="mb-6">
@@ -69,6 +70,11 @@ export function SymptomForm({ onAdd }) {
           <div className="flex flex-col gap-1.5">
             <span className="text-xs text-muted-foreground">Bristol scale (hover for description)</span>
             <ToggleRow options={BRISTOL_SCALE} value={bristolScale} onChange={setBristolScale} />
+          </div>
+        ) : type === "period" ? (
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs text-muted-foreground">Flow</span>
+            <ToggleRow options={FLOW_SCALE} value={severity} onChange={setSeverity} />
           </div>
         ) : type ? (
           <div className="flex flex-col gap-1.5">

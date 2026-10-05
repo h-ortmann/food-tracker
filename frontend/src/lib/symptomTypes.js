@@ -4,6 +4,7 @@ export const SYMPTOM_TYPES = [
   { value: "nausea", label: "Nausea" },
   { value: "diarrhea", label: "Diarrhea" },
   { value: "stool", label: "Stool" },
+  { value: "period", label: "Period" },
 ]
 
 export const BODY_PARTS = [
@@ -14,6 +15,14 @@ export const BODY_PARTS = [
 ]
 
 export const SEVERITY_SCALE = [1, 2, 3, 4, 5]
+
+// Stored as 1-4 in the severity column; shown as words
+export const FLOW_SCALE = [
+  { value: 1, label: "Spotting" },
+  { value: 2, label: "Light" },
+  { value: 3, label: "Medium" },
+  { value: 4, label: "Heavy" },
+]
 
 export const BRISTOL_SCALE = [
   { value: 1, title: "Separate hard lumps" },

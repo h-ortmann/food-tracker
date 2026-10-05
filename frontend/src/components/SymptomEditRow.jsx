@@ -3,7 +3,7 @@ import { Check, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ToggleRow } from "@/components/ToggleRow"
-import { SYMPTOM_TYPES, BODY_PARTS, SEVERITY_SCALE, BRISTOL_SCALE } from "@/lib/symptomTypes"
+import { SYMPTOM_TYPES, BODY_PARTS, SEVERITY_SCALE, BRISTOL_SCALE, FLOW_SCALE } from "@/lib/symptomTypes"
 
 export function SymptomEditRow({ symptom, onSave, onCancel }) {
   const [type, setType] = useState(symptom.type)
@@ -45,6 +45,8 @@ export function SymptomEditRow({ symptom, onSave, onCancel }) {
 
       {type === "stool" ? (
         <ToggleRow options={BRISTOL_SCALE} value={bristolScale} onChange={setBristolScale} />
+      ) : type === "period" ? (
+        <ToggleRow options={FLOW_SCALE} value={severity} onChange={setSeverity} />
       ) : (
         <ToggleRow options={SEVERITY_SCALE} value={severity} onChange={setSeverity} />
       )}

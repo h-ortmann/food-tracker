@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { MEAL_TYPE_META, OTHER_MEAL_META } from "@/lib/mealTypes"
 import { SymptomEditRow } from "@/components/SymptomEditRow"
+import { FLOW_SCALE } from "@/lib/symptomTypes"
 
 const SYMPTOM_META = {
   bloating: { icon: "🎈", label: "Bloating" },
@@ -12,12 +13,17 @@ const SYMPTOM_META = {
   nausea: { icon: "🤢", label: "Nausea" },
   diarrhea: { icon: "💧", label: "Diarrhea" },
   stool: { icon: "💩", label: "Stool" },
+  period: { icon: "🩸", label: "Period" },
 }
 
 function symptomDetail(symptom) {
   const meta = SYMPTOM_META[symptom.type] ?? { label: symptom.type }
   if (symptom.type === "stool") {
     return `${meta.label} — Bristol ${symptom.bristol_scale}`
+  }
+  if (symptom.type === "period") {
+    const flow = FLOW_SCALE.find((f) => f.value === symptom.severity)?.label
+    return `${meta.label} — ${flow?.toLowerCase()} flow`
   }
   if (symptom.type === "pain") {
     const part = symptom.body_part?.replace("_", " ")
