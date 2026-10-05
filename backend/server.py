@@ -229,6 +229,27 @@ def delete_weight(id):
 
 # --- AIP food lookup -------------------------------------------------------
 
+def ask_claude(system, user_message, schema, max_tokens):
+    """Ask Claude Sonnet and get back a dict matching `schema` (None if Claude refuses)."""
+    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    response = client.beta.messages.create(
+        model="claude-sonnet-5-5",
+        max_tokens=max_tokens,
+        system=system,
+        messages=[{"role": "user", "content": user_message}],
+        output_config={
+            "effort": "low",
+            "format": {"type": "json_schema", "schema": schema},
+        },
+        # If Claude's safety check declines a request, retry it on another model
+        betas=["server-side-fallback-2026-07-01"],
+        fallbacks="default",
+    )
+    if response.stop_reason == "refusal":
+        return None
+    text = next(block.text for block in response.content if block.type == "text")
+    return json.loads(text)
+
 AIP_LOOKUP_SCHEMA = {
     "type": "object",
     "properties": {
@@ -256,26 +277,66 @@ def aip_lookup():
     if not food:
         return jsonify({"error": "Please enter a food"}), 400
 
-    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-    response = client.beta.messages.create(
-        model="claude-sonnet-5-5",
-        max_tokens=2000,
-        system=AIP_LOOKUP_PROMPT,
-        messages=[{"role": "user", "content": food}],
-        output_config={
-            "effort": "low",
-            "format": {"type": "json_schema", "schema": AIP_LOOKUP_SCHEMA},
-        },
-        # If Claude's safety check declines a request, retry it on another model
-        betas=["server-side-fallback-2026-07-01"],
-        fallbacks="default",
-    )
-
-    if response.stop_reason == "refusal":
+    result = ask_claude(AIP_LOOKUP_PROMPT, food, AIP_LOOKUP_SCHEMA, max_tokens=2000)
+    if result is None:
         return jsonify({"error": "Couldn't look that one up. Try another food."}), 422
+    return jsonify(result)
 
-    text = next(block.text for block in response.content if block.type == "text")
-    return jsonify(json.loads(text))
+
+# --- AIP recipe suggestions ------------------------------------------------
+
+AIP_RECIPES_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "recipes": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "time": {"type": "string"},
+                    "description": {"type": "string"},
+                    "servings": {"type": "integer"},
+                    "calories_per_serving": {"type": "integer"},
+                    "ingredients": {"type": "array", "items": {"type": "string"}},
+                    "steps": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["name", "time", "description", "servings", "calories_per_serving", "ingredients", "steps"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["recipes"],
+    "additionalProperties": False,
+}
+
+AIP_RECIPES_PROMPT = """You are an expert cook for the Autoimmune Protocol (AIP) diet, elimination phase.
+The user describes what they feel like eating. Suggest exactly 3 different recipes.
+
+Every ingredient MUST be allowed during AIP elimination: no grains, legumes, dairy, eggs, nuts, seeds
+(including seed-based spices like cumin, coriander seed, mustard, fennel seed), nightshades (tomato,
+potato, peppers, aubergine, chilli, paprika, cayenne), refined sugar, seed oils, alcohol or additives.
+Double-check every spice and sauce.
+
+- name: short, appetising recipe name
+- time: total time, e.g. "25 min"
+- description: one sentence on what makes it good
+- servings: how many people the ingredient quantities serve
+- calories_per_serving: your best estimate of kcal per serving, calculated from the ingredient quantities
+- ingredients: each with a quantity, e.g. "2 chicken thighs"
+- steps: short, clear cooking steps in order"""
+
+
+@app.route("/aip/recipes", methods=["POST"])
+def aip_recipes():
+    craving = (request.json or {}).get("craving", "").strip()
+    if not craving:
+        return jsonify({"error": "Tell me what you feel like eating"}), 400
+
+    result = ask_claude(AIP_RECIPES_PROMPT, craving, AIP_RECIPES_SCHEMA, max_tokens=6000)
+    if result is None:
+        return jsonify({"error": "Couldn't come up with recipes for that. Try something else."}), 422
+    return jsonify(result)
 
 
 # --- Saved foods (personal safe / maybe / avoid list) ----------------------

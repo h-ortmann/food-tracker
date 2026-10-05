@@ -2,18 +2,8 @@ import { useEffect, useState } from "react"
 import { SearchBox } from "@/components/SearchBox"
 import { VerdictCard } from "@/components/VerdictCard"
 import { SavedFoodsList } from "@/components/SavedFoodsList"
-
-const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:5000"
-
-// Fetch helper: turns a non-OK response into an error with the backend's message
-function request(path, options) {
-  return fetch(`${API_URL}${path}`, options)
-    .then((res) => res.json().then((data) => ({ ok: res.ok, data })))
-    .then(({ ok, data }) => {
-      if (!ok) throw new Error(data.error)
-      return data
-    })
-}
+import { RecipeSuggestions } from "@/components/RecipeSuggestions"
+import { request, postJson } from "@/lib/api"
 
 // Smart: owns the state and talks to the backend
 export function Aip() {
@@ -21,6 +11,7 @@ export function Aip() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const [savedFoods, setSavedFoods] = useState([])
+  const [view, setView] = useState("check") // "check" | "recipes"
 
   useEffect(() => {
     request("/saved-foods")
@@ -31,22 +22,14 @@ export function Aip() {
   function lookUpFood(food) {
     setIsLoading(true)
     setError("")
-    request("/aip/lookup", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ food }),
-    })
+    postJson("/aip/lookup", { food })
       .then(setResult)
       .catch((err) => setError(err.message || "Something went wrong. Try again."))
       .finally(() => setIsLoading(false))
   }
 
   function saveFood() {
-    request("/saved-foods", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(result),
-    })
+    postJson("/saved-foods", result)
       .then((saved) =>
         // Replace the old entry if this food was already saved, otherwise add it
         setSavedFoods((prev) => [...prev.filter((item) => item.id !== saved.id), saved]
@@ -70,16 +53,40 @@ export function Aip() {
   return (
     <div className="max-w-lg sm:max-w-3xl mx-auto p-6 pb-24 flex flex-col gap-6">
       <h1 className="text-2xl font-bold">AIP</h1>
-      <SearchBox onSearch={lookUpFood} isLoading={isLoading} />
-      {error && <p className="text-sm text-red-700">{error}</p>}
-      {result && <VerdictCard result={result} isSaved={isSaved} onSave={saveFood} />}
-      <div className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold">My foods</h2>
-        <SavedFoodsList
-          savedFoods={savedFoods}
-          onSelect={(item) => { setResult(item); window.scrollTo({ top: 0, behavior: "smooth" }) }}
-          onDelete={deleteSavedFood}
-        />
+
+      <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1" role="tablist">
+        {[["check", "Check a food"], ["recipes", "Recipes"]].map(([key, label]) => (
+          <button
+            key={key}
+            role="tab"
+            aria-selected={view === key}
+            onClick={() => setView(key)}
+            className={`rounded-lg py-2 text-sm font-medium transition-colors ${
+              view === key ? "bg-card shadow-sm" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Both views stay mounted (just hidden) so switching tabs keeps results */}
+      <div className={`${view === "check" ? "flex" : "hidden"} flex-col gap-6`}>
+        <SearchBox onSearch={lookUpFood} isLoading={isLoading} />
+        {error && <p className="text-sm text-red-700">{error}</p>}
+        {result && <VerdictCard result={result} isSaved={isSaved} onSave={saveFood} />}
+        <div className="flex flex-col gap-3">
+          <h2 className="text-lg font-semibold">My foods</h2>
+          <SavedFoodsList
+            savedFoods={savedFoods}
+            onSelect={(item) => { setResult(item); window.scrollTo({ top: 0, behavior: "smooth" }) }}
+            onDelete={deleteSavedFood}
+          />
+        </div>
+      </div>
+
+      <div className={view === "recipes" ? "" : "hidden"}>
+        <RecipeSuggestions />
       </div>
     </div>
   )
