@@ -3,8 +3,13 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_cors import CORS
 from sqlalchemy.pool import NullPool
+from dotenv import load_dotenv
+import anthropic
 import datetime
+import json
 import os
+
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
@@ -202,6 +207,57 @@ def delete_weight(id):
     db.session.delete(weight)
     db.session.commit()
     return jsonify({"deleted": id})
+
+
+# --- AIP food lookup -------------------------------------------------------
+
+AIP_LOOKUP_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "food": {"type": "string"},
+        "verdict": {"type": "string", "enum": ["yes", "no", "maybe"]},
+        "reason": {"type": "string"},
+        "swap": {"type": "string"},
+    },
+    "required": ["food", "verdict", "reason", "swap"],
+    "additionalProperties": False,
+}
+
+AIP_LOOKUP_PROMPT = """You are an expert on the Autoimmune Protocol (AIP) diet, elimination phase.
+The user names a food. Decide whether it is allowed during the AIP elimination phase.
+
+- verdict: "yes" if allowed, "no" if excluded, "maybe" if it depends (preparation, quantity, a specific variety, or experts disagree).
+- reason: one short sentence explaining why, naming the relevant food group (e.g. nightshade, seed, grain, legume, dairy).
+- swap: if the verdict is "no" or "maybe", one concrete AIP-friendly alternative that fills the same role in a meal. If "yes", leave it empty.
+- food: the food name, cleaned up and capitalised."""
+
+
+@app.route("/aip/lookup", methods=["POST"])
+def aip_lookup():
+    food = (request.json or {}).get("food", "").strip()
+    if not food:
+        return jsonify({"error": "Please enter a food"}), 400
+
+    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    response = client.beta.messages.create(
+        model="claude-sonnet-5-5",
+        max_tokens=2000,
+        system=AIP_LOOKUP_PROMPT,
+        messages=[{"role": "user", "content": food}],
+        output_config={
+            "effort": "low",
+            "format": {"type": "json_schema", "schema": AIP_LOOKUP_SCHEMA},
+        },
+        # If Claude's safety check declines a request, retry it on another model
+        betas=["server-side-fallback-2026-07-01"],
+        fallbacks="default",
+    )
+
+    if response.stop_reason == "refusal":
+        return jsonify({"error": "Couldn't look that one up. Try another food."}), 422
+
+    text = next(block.text for block in response.content if block.type == "text")
+    return jsonify(json.loads(text))
 
 
 if __name__ == "__main__":
