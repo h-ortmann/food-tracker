@@ -103,6 +103,39 @@ class SavedFood(db.Model):
         }
 
 
+class Settings(db.Model):
+    # Single-row table: app-wide settings (there's only ever one user)
+    id = db.Column(db.Integer, primary_key=True)
+    calorie_goal = db.Column(db.Integer)
+
+    def to_dict(self):
+        return {"calorie_goal": self.calorie_goal}
+
+
+def get_settings():
+    settings = db.session.get(Settings, 1)
+    if settings is None:
+        settings = Settings(id=1)
+        db.session.add(settings)
+        db.session.commit()
+    return settings
+
+
+@app.route("/settings", methods=["GET"])
+def read_settings():
+    return jsonify(get_settings().to_dict())
+
+
+@app.route("/settings", methods=["PUT"])
+def update_settings():
+    settings = get_settings()
+    data = request.get_json()
+    if "calorie_goal" in data:
+        settings.calorie_goal = data["calorie_goal"]
+    db.session.commit()
+    return jsonify(settings.to_dict())
+
+
 @app.route("/meals", methods=["GET"])
 def get_meals():
     meals = Meal.query.all()

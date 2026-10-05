@@ -6,6 +6,7 @@ import { MealForm } from "@/components/MealForm"
 import { SymptomForm } from "@/components/SymptomForm"
 import { WeightForm } from "@/components/WeightForm"
 import { Timeline } from "@/components/Timeline"
+import { CalorieSummary } from "@/components/CalorieSummary"
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:5000"
 
@@ -13,6 +14,7 @@ export function Home() {
   const [meals, setMeals] = useState([])
   const [symptoms, setSymptoms] = useState([])
   const [weights, setWeights] = useState([])
+  const [calorieGoal, setCalorieGoal] = useState(null)
 
   const [mealSheetOpen, setMealSheetOpen] = useState(false)
   const [symptomSheetOpen, setSymptomSheetOpen] = useState(false)
@@ -33,7 +35,24 @@ export function Home() {
     fetchMeals()
     fetchSymptoms()
     fetchWeights()
+    fetchSettings()
   }, [])
+
+  function fetchSettings() {
+    fetch(`${API_URL}/settings`)
+      .then((res) => res.json())
+      .then((data) => setCalorieGoal(data.calorie_goal))
+  }
+
+  function saveCalorieGoal(goal) {
+    fetch(`${API_URL}/settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ calorie_goal: goal }),
+    })
+      .then((res) => res.json())
+      .then((data) => setCalorieGoal(data.calorie_goal))
+  }
 
   function fetchMeals() {
     fetch(`${API_URL}/meals`)
@@ -171,6 +190,12 @@ export function Home() {
     })
   }
 
+  // Today's date as YYYY-MM-DD in local time ("en-CA" happens to use that format)
+  const today = new Date().toLocaleDateString("en-CA")
+  const caloriesToday = meals
+    .filter((meal) => meal.date === today)
+    .reduce((sum, meal) => sum + (meal.calories || 0), 0)
+
   const lastWeight = weights.length > 0 ? weights[weights.length - 1] : null
 
   return (
@@ -182,6 +207,8 @@ export function Home() {
           {lastWeight ? `${lastWeight.weight} kg` : "Log weight"}
         </Button>
       </div>
+
+      <CalorieSummary total={caloriesToday} goal={calorieGoal} onSaveGoal={saveCalorieGoal} />
 
       <div className="flex gap-3 mb-6">
         <Button className="flex-1 h-14 flex-col gap-1" onClick={() => setMealSheetOpen(true)}>
