@@ -22,6 +22,9 @@ Milestone 1 app. A food/meal logging tracker. Goal: touch every layer of the sta
 - **All dependencies pinned** in `requirements.txt` — including `SQLAlchemy==2.0.50`, which isn't imported directly but must be pinned: an unpinned rebuild pulled SQLAlchemy 2.1 (default Postgres driver switched to `psycopg` v3, not installed) and crash-looped production on 2026-10-05
 - `anthropic==1.11.0` + `python-dotenv==1.2.4` for the AIP lookup; `ANTHROPIC_API_KEY` read from `backend/.env` locally (git-ignored) and Railway Variables in production
 - `POST /aip/lookup` — body `{"food": "..."}` → Claude Sonnet 5.5 with structured output (JSON schema) → `{food, verdict: "yes"|"no"|"maybe", reason, swap}`; 400 if empty, 422 on refusal. Effort `low`; server-side refusal fallbacks (`fallbacks="default"`) enabled. Prompt forces `food` to the standard English singular name (typos fixed, German → English) so the same food always gets the same name — needed for saved-food dedup
+- `ask_claude(system, user_message, schema, max_tokens)` helper — shared by both AI routes (Sonnet 5.5, structured output, effort low, refusal fallbacks; returns `None` on refusal)
+- `POST /aip/recipes` — body `{"craving": "..."}` → 3 AIP-compliant recipes `{recipes: [{name, time, description, servings, calories_per_serving, ingredients[], steps[]}]}`. Prompt lists every excluded group incl. seed spices. ~13s per call — under gunicorn's 30s default timeout on Railway; if it ever creeps up, raise the timeout in the Railway start command (`--timeout 120`)
+- Settings: `GET /settings`, `PUT /settings` — single-row `Settings` table (`id=1`, created on first read) holding `calorie_goal`
 - Saved foods: `GET /saved-foods` (sorted by name), `POST /saved-foods` (**upsert** — updates the existing row if that food name is already saved), `DELETE /saved-foods/<id>`
 
 ### Meal model fields
@@ -69,6 +72,9 @@ Single flexible table (not one table per symptom type) — chosen deliberately s
 | swap | String(200) | From the lookup |
 | created_at | DateTime | Defaults to now |
 
+### Settings model (added 2026-10-05)
+Single row (`id=1`): `calorie_goal` Integer, nullable. Stored in the DB (not localStorage) so phone and laptop share the same goal.
+
 Routes for Symptom/WeightEntry: full CRUD for both at `/symptoms` and `/symptoms/<id>`, `/weights` and `/weights/<id>`, same shape as the existing `/meals` routes.
 
 ### Frontend (`/frontend`)
@@ -90,6 +96,9 @@ The app moved from a single scrolling page to a mobile-app-style shell: a bottom
 - `src/pages/Home.jsx` — the diary (see below); owns all meals/symptoms/weights state and fetch/CRUD logic
 - `src/pages/Aip.jsx` — AIP food lookup (smart page: owns `result`/`isLoading`/`error`, calls `/aip/lookup`, shows errors). Renders `SearchBox` (dumb: collects text, calls `onSearch`) and `VerdictCard` (dumb: big coloured ✅/❌/⚠️ band filling to the card top, muted reason, "Try instead" swap box)
   - **Saved foods ("My foods")**: `VerdictCard` has a "Save to my list" button (shows "✓ Saved" when same food + same verdict already saved; re-enables if a later lookup gives a different verdict). `SavedFoodsList` groups into ✅ Safe / ⚠️ Maybe / ❌ Avoid — **phone: stacked collapsible headers with counts, all collapsed by default; desktop (sm+): three always-open columns**. Tapping a saved food shows its verdict card again with no AI call. Shared verdict colours/labels live in `src/lib/verdicts.js`. AIP page widens to `sm:max-w-3xl` on desktop to give the columns room
+  - **"Check a food | Recipes" toggle** at the top (segmented control). Both views stay mounted and are hidden with CSS, so switching keeps lookup results and generated recipes
+  - `RecipeSuggestions` (smart: owns craving/recipes/loading/error, calls `/aip/recipes`, pulsing skeleton cards while loading) → `RecipeCard` (dumb: name, description, time, ~kcal per serving, servings; tap to expand ingredients + steps)
+- `src/lib/api.js` — `request()` / `postJson()` fetch helpers with error handling (used by the AIP page; older Home fetches don't use it yet)
 - `src/pages/Analysis.jsx` — placeholder for phase 3 (trend analysis)
 - `frontend/vercel.json` — rewrites every path to `index.html` so routed pages (`/aip`, `/analysis`) work on refresh/direct link
 - `src/lib/mealTypes.js`, `src/lib/symptomTypes.js` — shared constants (icons/labels, toggle-row option lists) so the logging forms and the timeline display stay in sync instead of duplicating lookup tables
@@ -106,6 +115,7 @@ The app moved from a single scrolling page to a mobile-app-style shell: a bottom
   - Each food item shows calories and, if set, **grams in parentheses** (e.g. "Chicken — 300 kcal (150g)"), added 2026-10-04
   - **Symptoms and weight entries are also editable/deletable** in place (pencil opens an inline edit form, trash deletes with a `window.confirm` guard) — added 2026-10-04 for consistency with meals
   - Deleting a meal also asks for confirmation (added after the delete button became icon-only, to guard against accidental taps)
+- **`CalorieSummary`** card at the top: today's total kcal (computed in `Home.jsx` from meals whose `date` is today's local date — not stored), optional daily goal set inline (saved via `/settings`), progress bar coloured primary (<90%), green (90–110% "On target"), amber (>110% "over"), with "X kcal to go" / "X kcal over" caption
 - Empty state: "Nothing logged yet today" when the timeline is empty
 
 Frontend is fully split into components — `Home.jsx` owns fetch/state logic for all three entry types and passes callbacks down; forms (`MealForm`, `SymptomForm`, `WeightForm`) manage their own local input state; `Timeline` owns its own expand/collapse and "add item inline" state.
@@ -137,6 +147,10 @@ Frontend is fully split into components — `Home.jsx` owns fetch/state logic fo
 | Saved foods | Explicit Save button, upsert on duplicate name, no personal override yet | Auto-save would clutter the list with one-off curiosity searches; override ("my reaction") deferred until real use shows the need — may overlap with Phase 3 |
 | Saved foods dedup | Claude normalises food names (English, singular) + DB unique constraint | Hannah spotted German/English and typos would bypass exact-match uniqueness |
 | Saved foods layout | Stacked collapsible on phone, 3 columns on desktop | 3 columns were too cramped on a phone (Hannah's live evaluation) |
+| Recipe suggestions | Free-text craving → 3 full recipes in one Sonnet call, tap to expand; no photos, no saving yet | AIP needs ingredients + steps to trust compliance (use-it-up only gave names); photos often mismatched in use-it-up |
+| Recipe calories | AI estimate per serving + servings, shown with "~" | Hannah worried about under-eating on AIP; estimates are approximate, good enough for "meal or snack?" |
+| Calorie goal storage | DB settings table, not localStorage | Used on both phone and laptop — a per-device goal would silently differ |
+| Daily total | Computed on the fly from meals, never stored | Derivable data shouldn't be duplicated |
 | Timeline order | Newest-first (meals, symptoms, weights, and items within an expanded meal group) | Recent entries matter most for spotting patterns day-to-day |
 
 ## Deployment setup
@@ -192,7 +206,7 @@ FLASK_APP=server flask db upgrade
 Turning this from a plain meal logger into a symptom-and-food tracker ahead of an AIP diet. Three planned phases:
 
 1. **Symptom/reaction logger** — done 2026-09-06, reviewed and polished 2026-10-04 (nav/IA restructure, grams, newest-first order, full edit/delete for all entry types — see sections above). Committed and pushed.
-2. **AIP feature** — **food lookup done and live 2026-10-05** (see `/aip/lookup` + `Aip.jsx` above). Remaining: AI-suggested recipes, saved recipes — reuse use-it-up's recipe pattern, now with structured outputs. Also added 2026-10-05 (phase 1 territory): period tracking with flow level.
+2. **AIP feature** — **done 2026-10-05**: food lookup, saved foods list, recipe suggestions. Was: food lookup done and live 2026-10-05 (see `/aip/lookup` + `Aip.jsx` above). Remaining: AI-suggested recipes, saved recipes — reuse use-it-up's recipe pattern, now with structured outputs. Also added 2026-10-05 (phase 1 territory): period tracking with flow level.
 3. **Trend analysis** — correlate symptoms with meals/recipes eaten beforehand. Deliberately saved for last, once phases 1–2 have produced real logged data. Page shell exists (`src/pages/Analysis.jsx`) but is just a placeholder.
 
 Longer-term, explicitly deprioritized for now: making this accessible as a phone app rather than browser-only (PWA vs. native wrapper vs. React Native — needs fresh landscape research when it becomes the priority).
@@ -201,7 +215,7 @@ Known limitation: the Timeline's inline "+ Add item" (adding a forgotten item to
 
 ## What comes next
 
-1. **AIP recipe suggestions** (phase 2, part 2) on the AIP tab, below/alongside the lookup — reuse use-it-up's recipe generation, upgraded to structured outputs + Sonnet 5.5
+1. ~~AIP recipe suggestions~~ — done 2026-10-05 (Phase 2 complete). Backlog: save recipes; "use my safe foods" option; log a recipe as a meal (with its calories)
 2. ~~Save lookups into a personal list~~ — done 2026-10-05. Backlog: personal override ("my reaction") on a saved food; "you've searched this 3× — save it?" nudge via localStorage counter (only if Hannah catches herself re-searching without saving); remember open/closed state of the collapsible groups
 3. Older fetch calls in `Home.jsx` still have no error handling (AIP page does — use it as the pattern)
 4. Known limitation still open: inline "+ Add item" always saves with today's date
