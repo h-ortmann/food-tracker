@@ -21,7 +21,8 @@ Milestone 1 app. A food/meal logging tracker. Goal: touch every layer of the sta
 - Run locally with: `python3 server.py` → serves on `http://127.0.0.1:5000`
 - **All dependencies pinned** in `requirements.txt` — including `SQLAlchemy==2.0.50`, which isn't imported directly but must be pinned: an unpinned rebuild pulled SQLAlchemy 2.1 (default Postgres driver switched to `psycopg` v3, not installed) and crash-looped production on 2026-10-05
 - `anthropic==1.11.0` + `python-dotenv==1.2.4` for the AIP lookup; `ANTHROPIC_API_KEY` read from `backend/.env` locally (git-ignored) and Railway Variables in production
-- `POST /aip/lookup` — body `{"food": "..."}` → Claude Sonnet 5.5 with structured output (JSON schema) → `{food, verdict: "yes"|"no"|"maybe", reason, swap}`; 400 if empty, 422 on refusal. Effort `low`; server-side refusal fallbacks (`fallbacks="default"`) enabled
+- `POST /aip/lookup` — body `{"food": "..."}` → Claude Sonnet 5.5 with structured output (JSON schema) → `{food, verdict: "yes"|"no"|"maybe", reason, swap}`; 400 if empty, 422 on refusal. Effort `low`; server-side refusal fallbacks (`fallbacks="default"`) enabled. Prompt forces `food` to the standard English singular name (typos fixed, German → English) so the same food always gets the same name — needed for saved-food dedup
+- Saved foods: `GET /saved-foods` (sorted by name), `POST /saved-foods` (**upsert** — updates the existing row if that food name is already saved), `DELETE /saved-foods/<id>`
 
 ### Meal model fields
 | Field | Type | Notes |
@@ -58,7 +59,17 @@ Single flexible table (not one table per symptom type) — chosen deliberately s
 | date | Date | Defaults to today |
 | created_at | DateTime | Defaults to now |
 
-Routes: full CRUD for both at `/symptoms` and `/symptoms/<id>`, `/weights` and `/weights/<id>`, same shape as the existing `/meals` routes.
+### SavedFood model fields (added 2026-10-05)
+| Field | Type | Notes |
+|---|---|---|
+| id | Integer | Auto-generated primary key |
+| food | String(100) | Required, **unique** (database-enforced) |
+| verdict | String(10) | yes / no / maybe |
+| reason | String(500) | From the lookup |
+| swap | String(200) | From the lookup |
+| created_at | DateTime | Defaults to now |
+
+Routes for Symptom/WeightEntry: full CRUD for both at `/symptoms` and `/symptoms/<id>`, `/weights` and `/weights/<id>`, same shape as the existing `/meals` routes.
 
 ### Frontend (`/frontend`)
 - React + Vite
@@ -78,6 +89,7 @@ The app moved from a single scrolling page to a mobile-app-style shell: a bottom
 - `src/components/BottomNav.jsx` — fixed bottom nav, 3 tabs (Home / AIP / Analysis), active tab highlighted via `NavLink`
 - `src/pages/Home.jsx` — the diary (see below); owns all meals/symptoms/weights state and fetch/CRUD logic
 - `src/pages/Aip.jsx` — AIP food lookup (smart page: owns `result`/`isLoading`/`error`, calls `/aip/lookup`, shows errors). Renders `SearchBox` (dumb: collects text, calls `onSearch`) and `VerdictCard` (dumb: big coloured ✅/❌/⚠️ band filling to the card top, muted reason, "Try instead" swap box)
+  - **Saved foods ("My foods")**: `VerdictCard` has a "Save to my list" button (shows "✓ Saved" when same food + same verdict already saved; re-enables if a later lookup gives a different verdict). `SavedFoodsList` groups into ✅ Safe / ⚠️ Maybe / ❌ Avoid — **phone: stacked collapsible headers with counts, all collapsed by default; desktop (sm+): three always-open columns**. Tapping a saved food shows its verdict card again with no AI call. Shared verdict colours/labels live in `src/lib/verdicts.js`. AIP page widens to `sm:max-w-3xl` on desktop to give the columns room
 - `src/pages/Analysis.jsx` — placeholder for phase 3 (trend analysis)
 - `frontend/vercel.json` — rewrites every path to `index.html` so routed pages (`/aip`, `/analysis`) work on refresh/direct link
 - `src/lib/mealTypes.js`, `src/lib/symptomTypes.js` — shared constants (icons/labels, toggle-row option lists) so the logging forms and the timeline display stay in sync instead of duplicating lookup tables
@@ -122,6 +134,9 @@ Frontend is fully split into components — `Home.jsx` owns fetch/state logic fo
 | Verdict card hierarchy | Flashy verdict → quieter reason → swap | Hannah's design: answer at a glance, detail if wanted |
 | Period tracking | New `period` symptom type; flow 1–4 in existing `severity` column, displayed as words | No migration needed (flexible table); numbers stay queryable for Phase 3, words read faster |
 | Commit granularity | One commit per undoable idea — not split by backend/frontend layer | Discussed 2026-10-05 |
+| Saved foods | Explicit Save button, upsert on duplicate name, no personal override yet | Auto-save would clutter the list with one-off curiosity searches; override ("my reaction") deferred until real use shows the need — may overlap with Phase 3 |
+| Saved foods dedup | Claude normalises food names (English, singular) + DB unique constraint | Hannah spotted German/English and typos would bypass exact-match uniqueness |
+| Saved foods layout | Stacked collapsible on phone, 3 columns on desktop | 3 columns were too cramped on a phone (Hannah's live evaluation) |
 | Timeline order | Newest-first (meals, symptoms, weights, and items within an expanded meal group) | Recent entries matter most for spotting patterns day-to-day |
 
 ## Deployment setup
@@ -187,7 +202,7 @@ Known limitation: the Timeline's inline "+ Add item" (adding a forgotten item to
 ## What comes next
 
 1. **AIP recipe suggestions** (phase 2, part 2) on the AIP tab, below/alongside the lookup — reuse use-it-up's recipe generation, upgraded to structured outputs + Sonnet 5.5
-2. Optional: save lookups into a personal "safe foods / avoid" list
+2. ~~Save lookups into a personal list~~ — done 2026-10-05. Backlog: personal override ("my reaction") on a saved food; "you've searched this 3× — save it?" nudge via localStorage counter (only if Hannah catches herself re-searching without saving); remember open/closed state of the collapsible groups
 3. Older fetch calls in `Home.jsx` still have no error handling (AIP page does — use it as the pattern)
 4. Known limitation still open: inline "+ Add item" always saves with today's date
 5. Older backlog: app mascot / empty-state image; AI calorie estimation from meal name
