@@ -8,7 +8,7 @@ Milestone 1 app. A food/meal logging tracker. Goal: touch every layer of the sta
 - **Backend**: https://food-tracker-production-9e89.up.railway.app
 - **GitHub**: https://github.com/h-ortmann/food-tracker
 
-## What's been built (as of 2026-06-08)
+## What's been built (as of 2026-10-05)
 
 ### Backend (`/backend`)
 - Flask API with full CRUD: `GET /meals`, `POST /meals`, `PUT /meals/<id>`, `DELETE /meals/<id>`
@@ -19,6 +19,9 @@ Milestone 1 app. A food/meal logging tracker. Goal: touch every layer of the sta
 - `requirements.txt` at `backend/requirements.txt`
 - venv at `backend/venv/` — activate with `source venv/bin/activate`
 - Run locally with: `python3 server.py` → serves on `http://127.0.0.1:5000`
+- **All dependencies pinned** in `requirements.txt` — including `SQLAlchemy==2.0.50`, which isn't imported directly but must be pinned: an unpinned rebuild pulled SQLAlchemy 2.1 (default Postgres driver switched to `psycopg` v3, not installed) and crash-looped production on 2026-10-05
+- `anthropic==1.11.0` + `python-dotenv==1.2.4` for the AIP lookup; `ANTHROPIC_API_KEY` read from `backend/.env` locally (git-ignored) and Railway Variables in production
+- `POST /aip/lookup` — body `{"food": "..."}` → Claude Sonnet 5.5 with structured output (JSON schema) → `{food, verdict: "yes"|"no"|"maybe", reason, swap}`; 400 if empty, 422 on refusal. Effort `low`; server-side refusal fallbacks (`fallbacks="default"`) enabled
 
 ### Meal model fields
 | Field | Type | Notes |
@@ -37,8 +40,8 @@ All three models below also return a `timestamp` field (raw ISO datetime) alongs
 | Field | Type | Notes |
 |---|---|---|
 | id | Integer | Auto-generated primary key |
-| type | String(50) | bloating / pain / nausea / diarrhea / stool |
-| severity | Integer | 1–5 scale. Used for bloating/pain/nausea/diarrhea, not stool |
+| type | String(50) | bloating / pain / nausea / diarrhea / stool / period |
+| severity | Integer | 1–5 scale for bloating/pain/nausea/diarrhea. **For period: flow 1–4** (Spotting/Light/Medium/Heavy, shown as words via `FLOW_SCALE`). Not used for stool |
 | body_part | String(50) | Only for pain: stomach / digestive_tract / head / uterus |
 | bristol_scale | Integer | Only for stool: 1–7 |
 | notes | String(500) | Optional free text |
@@ -74,8 +77,9 @@ The app moved from a single scrolling page to a mobile-app-style shell: a bottom
 - `src/App.jsx` — just `<Routes>` for the three pages + `<BottomNav>`, rendered on every page
 - `src/components/BottomNav.jsx` — fixed bottom nav, 3 tabs (Home / AIP / Analysis), active tab highlighted via `NavLink`
 - `src/pages/Home.jsx` — the diary (see below); owns all meals/symptoms/weights state and fetch/CRUD logic
-- `src/pages/Aip.jsx` — placeholder for phase 2 (food-friendliness + recipes)
+- `src/pages/Aip.jsx` — AIP food lookup (smart page: owns `result`/`isLoading`/`error`, calls `/aip/lookup`, shows errors). Renders `SearchBox` (dumb: collects text, calls `onSearch`) and `VerdictCard` (dumb: big coloured ✅/❌/⚠️ band filling to the card top, muted reason, "Try instead" swap box)
 - `src/pages/Analysis.jsx` — placeholder for phase 3 (trend analysis)
+- `frontend/vercel.json` — rewrites every path to `index.html` so routed pages (`/aip`, `/analysis`) work on refresh/direct link
 - `src/lib/mealTypes.js`, `src/lib/symptomTypes.js` — shared constants (icons/labels, toggle-row option lists) so the logging forms and the timeline display stay in sync instead of duplicating lookup tables
 
 **Why only 3 tabs, not 4:** symptom/weight history isn't a separate page — the Home diary (the combined `Timeline`) already shows everything chronologically, so a dedicated "Food Log" or "Symptoms" page would just be a filtered duplicate of the same data.
@@ -112,6 +116,12 @@ Frontend is fully split into components — `Home.jsx` owns fetch/state logic fo
 | App structure | Bottom nav with 3 pages (Home/AIP/Analysis), routed with `react-router-dom` | Mobile-app-style navigation instead of one long scrolling page; decided before building AIP/Analysis so those features get built into their own screen instead of needing to be carved out of Home later |
 | Home page content | No separate "Food Log" or "Symptoms" page — Home's combined `Timeline` serves as the browsable diary for everything | A dedicated history page per entry type would just duplicate what the Timeline already shows |
 | Meal logging flow | Pick meal type first, then add multiple items before closing the sheet | Logging a full meal item-by-item (re-selecting type each time) was tedious |
+| Production deps | Pin exact versions, including hidden ones that have broken us | Unpinned SQLAlchemy drifted on rebuild and crashed prod (2026-10-05) |
+| AIP lookup model | Claude Sonnet 5.5 (Hannah's choice) | Accuracy matters more than cost for health guidance; Haiku more likely to miss edge cases |
+| AIP lookup output | Structured outputs (JSON schema with `enum` verdict) | Frontend maps verdict to colour/emoji, so shape must be guaranteed — no regex fence-stripping |
+| Verdict card hierarchy | Flashy verdict → quieter reason → swap | Hannah's design: answer at a glance, detail if wanted |
+| Period tracking | New `period` symptom type; flow 1–4 in existing `severity` column, displayed as words | No migration needed (flexible table); numbers stay queryable for Phase 3, words read faster |
+| Commit granularity | One commit per undoable idea — not split by backend/frontend layer | Discussed 2026-10-05 |
 | Timeline order | Newest-first (meals, symptoms, weights, and items within an expanded meal group) | Recent entries matter most for spotting patterns day-to-day |
 
 ## Deployment setup
@@ -119,8 +129,9 @@ Frontend is fully split into components — `Home.jsx` owns fetch/state logic fo
 **Railway (backend)**
 - Root directory: `backend`
 - Start command: `flask db upgrade && gunicorn server:app`
-- Env vars: `DATABASE_URL` (Neon connection string), `FLASK_APP=server`
+- Env vars: `DATABASE_URL` (Neon connection string), `FLASK_APP=server`, `ANTHROPIC_API_KEY` (added 2026-10-05)
 - Auto-deploys on push to `master`
+- ⚠️ Status shows green/Active even while the app crash-loops — after every deploy, curl `/meals` (and `/aip/lookup`) to confirm
 
 **Vercel (frontend)**
 - Root directory: `frontend`
@@ -135,7 +146,7 @@ Frontend is fully split into components — `Home.jsx` owns fetch/state logic fo
 ## Git
 
 Repo: `https://github.com/h-ortmann/food-tracker` (master branch)
-`.gitignore` excludes `venv/`, `node_modules/`, `*.db`, `instance/`, `**/__pycache__/`, `**/.env.local`
+`.gitignore` excludes `venv/`, `node_modules/`, `*.db`, `instance/`, `**/__pycache__/`, `**/.env.local`, `**/.env`
 
 ## To run locally
 Terminal 1 (backend):
@@ -166,7 +177,7 @@ FLASK_APP=server flask db upgrade
 Turning this from a plain meal logger into a symptom-and-food tracker ahead of an AIP diet. Three planned phases:
 
 1. **Symptom/reaction logger** — done 2026-09-06, reviewed and polished 2026-10-04 (nav/IA restructure, grams, newest-first order, full edit/delete for all entry types — see sections above). Committed and pushed.
-2. **AIP feature** — food-friendliness lookup, AI-suggested recipes, saved recipes. Should reuse the AI-recipe-generation pattern already built in the use-it-up project. Page shell exists (`src/pages/Aip.jsx`) but is just a placeholder.
+2. **AIP feature** — **food lookup done and live 2026-10-05** (see `/aip/lookup` + `Aip.jsx` above). Remaining: AI-suggested recipes, saved recipes — reuse use-it-up's recipe pattern, now with structured outputs. Also added 2026-10-05 (phase 1 territory): period tracking with flow level.
 3. **Trend analysis** — correlate symptoms with meals/recipes eaten beforehand. Deliberately saved for last, once phases 1–2 have produced real logged data. Page shell exists (`src/pages/Analysis.jsx`) but is just a placeholder.
 
 Longer-term, explicitly deprioritized for now: making this accessible as a phone app rather than browser-only (PWA vs. native wrapper vs. React Native — needs fresh landscape research when it becomes the priority).
@@ -175,5 +186,8 @@ Known limitation: the Timeline's inline "+ Add item" (adding a forgotten item to
 
 ## What comes next
 
-1. Move to the AIP feature (phase 2 above) — build out `src/pages/Aip.jsx` for real
-2. Older backlog, still valid: App mascot / real image for empty state; AI feature: calorie estimation from meal name
+1. **AIP recipe suggestions** (phase 2, part 2) on the AIP tab, below/alongside the lookup — reuse use-it-up's recipe generation, upgraded to structured outputs + Sonnet 5.5
+2. Optional: save lookups into a personal "safe foods / avoid" list
+3. Older fetch calls in `Home.jsx` still have no error handling (AIP page does — use it as the pattern)
+4. Known limitation still open: inline "+ Add item" always saves with today's date
+5. Older backlog: app mascot / empty-state image; AI calorie estimation from meal name
